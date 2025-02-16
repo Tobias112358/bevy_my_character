@@ -92,10 +92,10 @@ fn rotate_camera(
     for motion in mouse_motion.read() {
         let yaw = -motion.delta.x * 0.003;
 
-        if yaw > 0.05 {
-            camera_state.rotation *= Quat::from_rotation_y(0.05);
-        } else if yaw < -0.05 {
-            camera_state.rotation *= Quat::from_rotation_y(-0.05);
+        if yaw > 0.15 {
+            camera_state.rotation *= Quat::from_rotation_y(0.15);
+        } else if yaw < -0.15 {
+            camera_state.rotation *= Quat::from_rotation_y(-0.15);
         } else {
             camera_state.rotation *= Quat::from_rotation_y(yaw);
         }

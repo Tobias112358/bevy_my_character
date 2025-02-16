@@ -11,14 +11,11 @@ mod character_camera;
 use character_camera::CameraState;
 
 use crate::{
-    asset_loader::{AssetLoadingState, CharacterHandle},
-    scene::Ground
+    asset_loader::{AssetLoadingState, CharacterHandle}
 };
 
 #[derive(Component)]
-pub struct PlayerCharacter {
-    pub on_ground: bool
-}
+pub struct PlayerCharacter;
 
 pub fn plugin(app: &mut App) {
     app
@@ -41,9 +38,7 @@ pub fn setup(
 ) {
 
     commands.spawn((
-        PlayerCharacter {
-            on_ground: true
-        },
+        PlayerCharacter,
         SceneRoot(dogman.scene.clone()), 
         Transform::from_xyz(0.0, 4.0, 0.0),
         RigidBody::Dynamic,
@@ -77,12 +72,12 @@ fn add_animation_transition_to_player(
 fn animation_handler(
     mut animation_players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     character_handle: Res<CharacterHandle>,
-    player_query: Query<(&LinearVelocity, &PlayerCharacter, &TnuaController), With<PlayerCharacter>>,
+    player_query: Query<(&LinearVelocity, &TnuaController), With<PlayerCharacter>>,
     mut current_animation: Local<usize>
 ) {
 
     for (mut anim_player, mut transitions) in &mut animation_players {
-        let Ok((velocity, player_data, tnua_context)) = player_query.get_single() else {
+        let Ok((velocity, tnua_context)) = player_query.get_single() else {
             continue;
         };
 
@@ -91,7 +86,7 @@ fn animation_handler(
             continue;
         };
 
-        
+
         if is_airborne {
             if *current_animation != 1 {
                 *current_animation = 1;
@@ -188,7 +183,7 @@ fn apply_controls(
             // The height is the only mandatory field of the jump button.
             height: 15.0,
             // `TnuaBuiltinJump` also has customization fields with sensible defaults.
-            input_buffer_time: 500.75,
+            fall_extra_gravity: 30.0,
             ..Default::default()
         });
     }
