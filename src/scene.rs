@@ -10,6 +10,9 @@ pub fn plugin(app: &mut App) {
         ;
 }
 
+#[derive(Component)]
+pub struct Ground;
+
 pub fn setup(
     mut commands: Commands,
     //dogman: Res<CharacterHandle>,
@@ -28,6 +31,7 @@ pub fn setup(
     });
 
     commands.spawn((
+        Ground,
         Mesh3d(plane),
         MeshMaterial3d(cube_mat),
         Transform::from_translation(Vec3::new(0., -1., 0.)),

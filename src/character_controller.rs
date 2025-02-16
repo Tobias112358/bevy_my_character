@@ -1,62 +1,50 @@
 use std::time::Duration;
 
-use bevy::{animation::RepeatAnimation, prelude::*, render::camera};
+use bevy::prelude::*;
 use avian3d::prelude::*;
 
 use bevy_tnua::prelude::*;
 use bevy_tnua_avian3d::*; 
 
-use bevy::input::mouse::MouseMotion;
+mod character_camera;
 
-use crate::asset_loader::{AssetLoadingState, CharacterHandle};
+use character_camera::CameraState;
+
+use crate::{
+    asset_loader::{AssetLoadingState, CharacterHandle},
+    scene::Ground
+};
 
 #[derive(Component)]
-pub struct PlayerCharacter;
-
-#[derive(Component)]
-pub struct CameraState {
-    pub rotation: Quat,
-    pub yaw: f32
+pub struct PlayerCharacter {
+    pub on_ground: bool
 }
 
 pub fn plugin(app: &mut App) {
     app
+        .add_plugins(character_camera::plugin)
         .add_plugins((
             TnuaControllerPlugin::new(FixedUpdate),
             TnuaAvian3dPlugin::new(FixedUpdate),
         ))
         .add_systems(OnEnter(AssetLoadingState::Loaded), setup)
         .add_systems(Update, (
-            move_camera, 
             add_animation_transition_to_player,
-            cycle_animation,
             apply_controls,
-            //rotate_camera,
-            //camera_look_at_player,
             animation_handler,
-            //camera_follow_player
-            //focus_camera_on_player
-        ).run_if(in_state(AssetLoadingState::Loaded))
-
-        )
-        .add_systems(FixedUpdate, (
-            camera_move_to_player,
-            camera_rotate_to_player,
-            rotate_camera
-        ).run_if(in_state(AssetLoadingState::Loaded)))
-        ;
+            on_ground_check
+        ).run_if(in_state(AssetLoadingState::Loaded)));
 }
 
 pub fn setup(
     mut commands: Commands,
     dogman: Res<CharacterHandle>
 ) {
-    let mut camera_rotation = Quat::from_rotation_y(std::f32::consts::PI);
-
-    camera_rotation *= Quat::from_rotation_x(-std::f32::consts::FRAC_PI_8);
 
     commands.spawn((
-        PlayerCharacter,
+        PlayerCharacter {
+            on_ground: true
+        },
         SceneRoot(dogman.scene.clone()), 
         Transform::from_xyz(0.0, 4.0, 0.0),
         RigidBody::Dynamic,
@@ -65,46 +53,7 @@ pub fn setup(
         TnuaAvian3dSensorShape(Collider::cylinder(1.4, 7.2))
     ));
 
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_translation(Vec3::new(0.0, 15.0, -12.0)).with_rotation(camera_rotation),
-        CameraState {
-            rotation: Quat::IDENTITY,
-            yaw: 0.
-        },
-    ));
-}
-
-pub fn move_camera(
-    time: Res<Time>,
-    input: Res<ButtonInput<KeyCode>>, 
-    mut camera_transform_query: Query<&mut Transform, With<Camera3d>>,
-    mut mouse_motion: EventReader<MouseMotion>,
-) {
-    let mut camera_transform = camera_transform_query.single_mut();
     
-    // let mut frame_transation = Vec3::ZERO;
-
-    // if input.pressed(KeyCode::KeyW) {
-    //     frame_transation += camera_transform.forward().as_vec3();
-    // } else if input.pressed(KeyCode::KeyS) {
-    //     frame_transation -= camera_transform.forward().as_vec3();
-    // }
-    // if input.pressed(KeyCode::KeyD) {
-    //     frame_transation += camera_transform.right().as_vec3();
-    // } else if input.pressed(KeyCode::KeyA) {
-    //     frame_transation -= camera_transform.right().as_vec3();
-    // }
-
-    // if input.pressed(KeyCode::KeyE) {
-    //     frame_transation += camera_transform.up().as_vec3();
-    // } else if input.pressed(KeyCode::KeyQ) {
-    //     frame_transation -= camera_transform.up().as_vec3();
-    // }
-
-    // let speed = 10.0;
-
-    // camera_transform.translation += frame_transation *  speed * time.delta_secs();
 }
 
 fn add_animation_transition_to_player(
@@ -126,134 +75,43 @@ fn add_animation_transition_to_player(
     }
 }
 
-fn cycle_animation(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut animation_players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
-    character_handle: Res<CharacterHandle>,
-    mut current_animation: Local<usize>,
+fn on_ground_check(
+    mut player_query: Query<(Entity, &mut PlayerCharacter), With<PlayerCharacter>>,
+    ground_query: Query<Entity, (With<Ground>, Without<PlayerCharacter>)>,
+    mut collision_event_reader: EventReader<CollisionStarted>,
 ) {
-    // for (mut anim_player, mut transitions) in &mut animation_players {
-    //     // let Some((&playing_animation_index, _)) = anim_player.playing_animations().next() else {
-    //     //     continue;
-    //     // };
 
-    //     if keyboard_input.just_pressed(KeyCode::Space) {
-    //         *current_animation = (*current_animation + 1) % character_handle.animations.len();
-
-    //         transitions
-    //             .play(
-    //                 &mut anim_player,
-    //                 character_handle.animations[*current_animation],
-    //                 Duration::from_millis(250),
-    //             )
-    //             .repeat();
-
-    //     }
-    // }
-}
-
-fn rotate_camera(
-    mut query: Query<(&mut Transform, &mut CameraState), With<Camera3d>>,
-    player_query: Query<&Transform, (With<PlayerCharacter>, Without<Camera3d>)>,
-    mut mouse_motion: EventReader<MouseMotion>
-) {
-    let Ok((mut transform, mut camera_state)) = query.get_single_mut() else {
+    let Ok((player_entity, mut player_data)) = player_query.get_single_mut() else {
         return;
     };
 
-    let Ok(player_transform) = player_query.get_single() else {
+    let Ok(ground_entity) = ground_query.get_single() else {
+        println!("HERE");
         return;
     };
 
-    for motion in mouse_motion.read() {
-        let yaw = -motion.delta.x * 0.003;
-        let pitch = -motion.delta.y * 0.002;
+    for CollisionStarted(entity1, entity2) in collision_event_reader.read() {
+        println!("Player: {:?}, Ground: {:?}, Ent1: {:?}, Ent2: {:?}", player_entity, ground_entity, entity1, entity2);
+        if (entity1 == &player_entity && entity2 == &ground_entity) || (entity2 == &player_entity && entity1 == &ground_entity) {
+            player_data.on_ground = true;
 
-        let mut y_rot: Quat;
-        if yaw > 0.05 {
-            y_rot = Quat::from_rotation_y(0.05);
-        } else if yaw < -0.05 {
-            y_rot = Quat::from_rotation_y(-0.05);
-        } else {
-            y_rot = Quat::from_rotation_y(yaw);
+            break;
         }
-
-        println!("{}", pitch);
-
-        camera_state.rotation *= y_rot;// * Quat::from_rotation_x(pitch);
-        //camera_state.yaw += yaw;
-        //transform.rotate_local_y(yaw);
-
-        //println!("{:?}", camera_state.rotation);
-
-        //transform.translate_around(player_transform.translation, camera_state.rotation);
     }
-}
-
-fn camera_move_to_player(
-    player_transform_query: Query<&Transform, With<PlayerCharacter>>,
-    mut camera_transform_query: Query<(&mut Transform, &CameraState), (With<Camera3d>, Without<PlayerCharacter>)>,
-    mut mouse_motion: EventReader<MouseMotion>
-) {
-    let Ok(player_transform) = player_transform_query.get_single() else {
-        return;
-    };
-
-    let Ok((mut camera_transform, camera_state)) = camera_transform_query.get_single_mut() else {
-        return;
-    };
-
-    
-    let mut new_cam_pos = Vec3::new(0.0, 8.0, -15.0);
-
-    
-    new_cam_pos = camera_state.rotation.mul_vec3(new_cam_pos);
-    new_cam_pos += player_transform.translation;
-
-    let mut yaw = 0.0;
-    for motion in mouse_motion.read() {
-        yaw += -motion.delta.x * 0.001;
-
-        //println!("{}", yaw);
-
-
-    }
-
-    camera_transform.translation = camera_transform.translation.lerp(new_cam_pos, 0.2 + yaw.abs());
-    
-}
-
-fn camera_rotate_to_player(
-    player_transform_query: Query<&Transform, With<PlayerCharacter>>,
-    mut camera_transform_query: Query<(&mut Transform, &CameraState), (With<Camera3d>, Without<PlayerCharacter>)>
-) {
-    let Ok(player_transform) = player_transform_query.get_single() else {
-        return;
-    };
-
-    let Ok((mut camera_transform, camera_state)) = camera_transform_query.get_single_mut() else {
-        return;
-    };
-
-    let player_transform_overhead = Vec3::new(player_transform.translation.x, player_transform.translation.y + 2.0, player_transform.translation.z);
-
-    let look_at_player = camera_transform.looking_at(player_transform_overhead, Dir3::Y);
-
-    camera_transform.rotation = camera_transform.rotation.slerp(look_at_player.rotation, 0.5);
 }
 
 fn animation_handler(
     mut animation_players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     character_handle: Res<CharacterHandle>,
-    rigidbody_query: Query<(&LinearVelocity, &Transform), With<PlayerCharacter>>,
+    player_query: Query<(&LinearVelocity, &PlayerCharacter), With<PlayerCharacter>>,
     mut current_animation: Local<usize>,
 ) {
     for (mut anim_player, mut transitions) in &mut animation_players {
-        let Ok((velocity, transform)) = rigidbody_query.get_single() else {
+        let Ok((velocity, player_data)) = player_query.get_single() else {
             continue;
         };
 
-        if velocity.length() > 0.25 {
+        if velocity.length() > 0.25 && player_data.on_ground {
             if *current_animation != 2 {
                 *current_animation = 2;
                 transitions
@@ -264,7 +122,17 @@ fn animation_handler(
                 )
                 .repeat();
             }
-            
+        } else if !player_data.on_ground {
+            if *current_animation != 1 {
+                *current_animation = 1;
+                transitions
+                .play(
+                    &mut anim_player,
+                    character_handle.animations[*current_animation],
+                    Duration::from_millis(10),
+                )
+                .repeat();
+            }
         } else {
             if *current_animation != 0 {
                 *current_animation = 0;
@@ -337,7 +205,7 @@ fn apply_controls(
     if keyboard.pressed(KeyCode::Space) {
         controller.action(TnuaBuiltinJump {
             // The height is the only mandatory field of the jump button.
-            height: 4.0,
+            height: 15.0,
             // `TnuaBuiltinJump` also has customization fields with sensible defaults.
             ..Default::default()
         });
