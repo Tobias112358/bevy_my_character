@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::{prelude::*, animation::RepeatAnimation};
+use bevy::{animation::RepeatAnimation, prelude::*, render::camera};
 use avian3d::prelude::*;
 
 use bevy_tnua::prelude::*;
@@ -12,6 +12,12 @@ use crate::asset_loader::{AssetLoadingState, CharacterHandle};
 
 #[derive(Component)]
 pub struct PlayerCharacter;
+
+#[derive(Component)]
+pub struct CameraState {
+    pub rotation: Quat,
+    pub yaw: f32
+}
 
 pub fn plugin(app: &mut App) {
     app
@@ -25,12 +31,20 @@ pub fn plugin(app: &mut App) {
             add_animation_transition_to_player,
             cycle_animation,
             apply_controls,
-            rotate_player,
-            camera_look_at_player,
+            //rotate_camera,
+            //camera_look_at_player,
             animation_handler,
+            //camera_follow_player
             //focus_camera_on_player
         ).run_if(in_state(AssetLoadingState::Loaded))
-        );
+
+        )
+        .add_systems(FixedUpdate, (
+            camera_move_to_player,
+            camera_rotate_to_player,
+            rotate_camera
+        ).run_if(in_state(AssetLoadingState::Loaded)))
+        ;
 }
 
 pub fn setup(
@@ -44,7 +58,7 @@ pub fn setup(
     commands.spawn((
         PlayerCharacter,
         SceneRoot(dogman.scene.clone()), 
-        Transform::from_xyz(0.0, 4.0, -4.0),
+        Transform::from_xyz(0.0, 4.0, 0.0),
         RigidBody::Dynamic,
         Collider::cylinder(1.5, 7.3),
         TnuaController::default(),
@@ -54,6 +68,10 @@ pub fn setup(
     commands.spawn((
         Camera3d::default(),
         Transform::from_translation(Vec3::new(0.0, 15.0, -12.0)).with_rotation(camera_rotation),
+        CameraState {
+            rotation: Quat::IDENTITY,
+            yaw: 0.
+        },
     ));
 }
 
@@ -134,38 +152,94 @@ fn cycle_animation(
     // }
 }
 
-fn rotate_player(
-    mut query: Query<&mut Transform, With<PlayerCharacter>>,
+fn rotate_camera(
+    mut query: Query<(&mut Transform, &mut CameraState), With<Camera3d>>,
+    player_query: Query<&Transform, (With<PlayerCharacter>, Without<Camera3d>)>,
     mut mouse_motion: EventReader<MouseMotion>
 ) {
-    let Ok(mut transform) = query.get_single_mut() else {
+    let Ok((mut transform, mut camera_state)) = query.get_single_mut() else {
+        return;
+    };
+
+    let Ok(player_transform) = player_query.get_single() else {
         return;
     };
 
     for motion in mouse_motion.read() {
         let yaw = -motion.delta.x * 0.003;
+        let pitch = -motion.delta.y * 0.002;
 
+        let mut y_rot: Quat;
+        if yaw > 0.05 {
+            y_rot = Quat::from_rotation_y(0.05);
+        } else if yaw < -0.05 {
+            y_rot = Quat::from_rotation_y(-0.05);
+        } else {
+            y_rot = Quat::from_rotation_y(yaw);
+        }
+
+        println!("{}", pitch);
+
+        camera_state.rotation *= y_rot;// * Quat::from_rotation_x(pitch);
+        //camera_state.yaw += yaw;
         //transform.rotate_local_y(yaw);
 
+        //println!("{:?}", camera_state.rotation);
+
+        //transform.translate_around(player_transform.translation, camera_state.rotation);
     }
 }
 
-fn camera_look_at_player(
+fn camera_move_to_player(
     player_transform_query: Query<&Transform, With<PlayerCharacter>>,
-    mut camera_transform_query: Query<&mut Transform, (With<Camera3d>, Without<PlayerCharacter>)>
+    mut camera_transform_query: Query<(&mut Transform, &CameraState), (With<Camera3d>, Without<PlayerCharacter>)>,
+    mut mouse_motion: EventReader<MouseMotion>
 ) {
     let Ok(player_transform) = player_transform_query.get_single() else {
         return;
     };
 
-    let Ok(mut camera_transform) = camera_transform_query.get_single_mut() else {
+    let Ok((mut camera_transform, camera_state)) = camera_transform_query.get_single_mut() else {
         return;
     };
 
+    
+    let mut new_cam_pos = Vec3::new(0.0, 8.0, -15.0);
 
-    let look_at_player = camera_transform.looking_at(player_transform.translation, Dir3::Y);
+    
+    new_cam_pos = camera_state.rotation.mul_vec3(new_cam_pos);
+    new_cam_pos += player_transform.translation;
 
-    camera_transform.rotation = camera_transform.rotation.lerp(look_at_player.rotation, 1.0);
+    let mut yaw = 0.0;
+    for motion in mouse_motion.read() {
+        yaw += -motion.delta.x * 0.001;
+
+        //println!("{}", yaw);
+
+
+    }
+
+    camera_transform.translation = camera_transform.translation.lerp(new_cam_pos, 0.2 + yaw.abs());
+    
+}
+
+fn camera_rotate_to_player(
+    player_transform_query: Query<&Transform, With<PlayerCharacter>>,
+    mut camera_transform_query: Query<(&mut Transform, &CameraState), (With<Camera3d>, Without<PlayerCharacter>)>
+) {
+    let Ok(player_transform) = player_transform_query.get_single() else {
+        return;
+    };
+
+    let Ok((mut camera_transform, camera_state)) = camera_transform_query.get_single_mut() else {
+        return;
+    };
+
+    let player_transform_overhead = Vec3::new(player_transform.translation.x, player_transform.translation.y + 2.0, player_transform.translation.z);
+
+    let look_at_player = camera_transform.looking_at(player_transform_overhead, Dir3::Y);
+
+    camera_transform.rotation = camera_transform.rotation.slerp(look_at_player.rotation, 0.5);
 }
 
 fn animation_handler(
@@ -207,7 +281,11 @@ fn animation_handler(
 }
 
 
-fn apply_controls(keyboard: Res<ButtonInput<KeyCode>>, mut query: Query<(&mut Transform, &mut TnuaController)>) {
+fn apply_controls(
+    keyboard: Res<ButtonInput<KeyCode>>, 
+    mut query: Query<(&mut Transform, &mut TnuaController), With<PlayerCharacter>>,
+    camera_query: Query<&CameraState, (With<Camera3d>, Without<PlayerCharacter>)>
+) {
     let Ok((mut transform, mut controller)) = query.get_single_mut() else {
         return;
     };
@@ -226,6 +304,12 @@ fn apply_controls(keyboard: Res<ButtonInput<KeyCode>>, mut query: Query<(&mut Tr
     if keyboard.pressed(KeyCode::KeyD) {
         direction -= Vec3::X;
     }
+
+    let Ok(camera_state) = camera_query.get_single() else {
+        return;
+    };
+
+    direction = camera_state.rotation.mul_vec3(direction);
 
     if direction != Vec3::ZERO {
         let face_direction = transform.looking_to(-direction, Dir3::Y);

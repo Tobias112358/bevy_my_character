@@ -37,8 +37,12 @@ pub fn setup(
 
     commands.spawn((
         
-        PointLight::default(),
-        Transform::from_xyz(0.0, 4.0, 0.0),
+        PointLight {
+            intensity: 1_000_000.0,
+            range: 100_000.0,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 12.0, 0.0),
     ));
 
     commands.spawn(
