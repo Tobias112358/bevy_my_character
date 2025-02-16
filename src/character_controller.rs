@@ -11,7 +11,7 @@ mod character_camera;
 use character_camera::CameraState;
 
 use crate::{
-    asset_loader::{AssetLoadingState, CharacterHandle}
+    asset_loader::{AssetLoadingState, CharacterHandle}, combat_manager::{AttackType, CombatAction}
 };
 
 #[derive(Component)]
@@ -72,12 +72,12 @@ fn add_animation_transition_to_player(
 fn animation_handler(
     mut animation_players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     character_handle: Res<CharacterHandle>,
-    player_query: Query<(&LinearVelocity, &TnuaController), With<PlayerCharacter>>,
+    player_query: Query<(&LinearVelocity, &TnuaController, Option<&CombatAction>), With<PlayerCharacter>>,
     mut current_animation: Local<usize>
 ) {
 
     for (mut anim_player, mut transitions) in &mut animation_players {
-        let Ok((velocity, tnua_context)) = player_query.get_single() else {
+        let Ok((velocity, tnua_context, combat_action_option)) = player_query.get_single() else {
             continue;
         };
 
@@ -86,41 +86,68 @@ fn animation_handler(
             continue;
         };
 
-
-        if is_airborne {
-            if *current_animation != 1 {
-                *current_animation = 1;
-                transitions
-                .play(
-                    &mut anim_player,
-                    character_handle.animations[*current_animation],
-                    Duration::from_millis(50),
-                )
-                .set_speed(0.8);
-            }
-        } else if velocity.length() > 0.25 && !is_airborne {
-            if *current_animation != 2 {
-                *current_animation = 2;
-                transitions
-                .play(
-                    &mut anim_player,
-                    character_handle.animations[*current_animation],
-                    Duration::from_millis(250),
-                )
-                .repeat();
+        if combat_action_option.is_some() {
+            if combat_action_option.unwrap().attack_type == AttackType::Light {
+                if *current_animation != *character_handle.animation_name_reference.get("LightAttack").unwrap() {
+                    *current_animation = *character_handle.animation_name_reference.get("LightAttack").unwrap();
+                    transitions
+                    .play(
+                        &mut anim_player,
+                        character_handle.animations[*current_animation],
+                        Duration::from_millis(50),
+                    )
+                    .set_speed(2.);
+                } 
+            } else {
+                if *current_animation != *character_handle.animation_name_reference.get("HeavyAttack").unwrap() {
+                    *current_animation = *character_handle.animation_name_reference.get("HeavyAttack").unwrap();
+                    transitions
+                    .play(
+                        &mut anim_player,
+                        character_handle.animations[*current_animation],
+                        Duration::from_millis(50),
+                    )
+                    .set_speed(2.);
+                }
             }
         } else {
-            if *current_animation != 0 {
-                *current_animation = 0;
-            transitions
-                .play(
-                    &mut anim_player,
-                    character_handle.animations[*current_animation],
-                    Duration::from_millis(250),
-                )
-                .repeat();
+            if is_airborne {
+                if *current_animation != *character_handle.animation_name_reference.get("Jumping").unwrap() {
+                    *current_animation = *character_handle.animation_name_reference.get("Jumping").unwrap();
+                    transitions
+                    .play(
+                        &mut anim_player,
+                        character_handle.animations[*current_animation],
+                        Duration::from_millis(50),
+                    )
+                    .set_speed(0.8);
+                }
+            } else if velocity.length() > 0.25 && !is_airborne {
+                if *current_animation != *character_handle.animation_name_reference.get("Running").unwrap() {
+                    *current_animation = *character_handle.animation_name_reference.get("Running").unwrap();
+                    transitions
+                    .play(
+                        &mut anim_player,
+                        character_handle.animations[*current_animation],
+                        Duration::from_millis(250),
+                    )
+                    .repeat();
+                }
+            } else {
+                if *current_animation != *character_handle.animation_name_reference.get("Idle").unwrap() {
+                    *current_animation = *character_handle.animation_name_reference.get("Idle").unwrap();
+                    println!("{}", *current_animation);
+                transitions
+                    .play(
+                        &mut anim_player,
+                        character_handle.animations[*current_animation],
+                        Duration::from_millis(250),
+                    )
+                    .repeat();
+                }
             }
         }
+        
     }
 }
 
