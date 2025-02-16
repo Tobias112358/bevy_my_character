@@ -31,8 +31,7 @@ pub fn plugin(app: &mut App) {
         .add_systems(Update, (
             add_animation_transition_to_player,
             apply_controls,
-            animation_handler,
-            on_ground_check
+            animation_handler
         ).run_if(in_state(AssetLoadingState::Loaded)));
 }
 
@@ -75,43 +74,36 @@ fn add_animation_transition_to_player(
     }
 }
 
-fn on_ground_check(
-    mut player_query: Query<(Entity, &mut PlayerCharacter), With<PlayerCharacter>>,
-    ground_query: Query<Entity, (With<Ground>, Without<PlayerCharacter>)>,
-    mut collision_event_reader: EventReader<CollisionStarted>,
-) {
-
-    let Ok((player_entity, mut player_data)) = player_query.get_single_mut() else {
-        return;
-    };
-
-    let Ok(ground_entity) = ground_query.get_single() else {
-        println!("HERE");
-        return;
-    };
-
-    for CollisionStarted(entity1, entity2) in collision_event_reader.read() {
-        println!("Player: {:?}, Ground: {:?}, Ent1: {:?}, Ent2: {:?}", player_entity, ground_entity, entity1, entity2);
-        if (entity1 == &player_entity && entity2 == &ground_entity) || (entity2 == &player_entity && entity1 == &ground_entity) {
-            player_data.on_ground = true;
-
-            break;
-        }
-    }
-}
-
 fn animation_handler(
     mut animation_players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     character_handle: Res<CharacterHandle>,
-    player_query: Query<(&LinearVelocity, &PlayerCharacter), With<PlayerCharacter>>,
-    mut current_animation: Local<usize>,
+    player_query: Query<(&LinearVelocity, &PlayerCharacter, &TnuaController), With<PlayerCharacter>>,
+    mut current_animation: Local<usize>
 ) {
+
     for (mut anim_player, mut transitions) in &mut animation_players {
-        let Ok((velocity, player_data)) = player_query.get_single() else {
+        let Ok((velocity, player_data, tnua_context)) = player_query.get_single() else {
             continue;
         };
 
-        if velocity.length() > 0.25 && player_data.on_ground {
+        let Ok(is_airborne) = tnua_context.is_airborne() else {
+            println!("Failed to check if tnua_context is airborne");
+            continue;
+        };
+
+        
+        if is_airborne {
+            if *current_animation != 1 {
+                *current_animation = 1;
+                transitions
+                .play(
+                    &mut anim_player,
+                    character_handle.animations[*current_animation],
+                    Duration::from_millis(50),
+                )
+                .set_speed(0.8);
+            }
+        } else if velocity.length() > 0.25 && !is_airborne {
             if *current_animation != 2 {
                 *current_animation = 2;
                 transitions
@@ -119,17 +111,6 @@ fn animation_handler(
                     &mut anim_player,
                     character_handle.animations[*current_animation],
                     Duration::from_millis(250),
-                )
-                .repeat();
-            }
-        } else if !player_data.on_ground {
-            if *current_animation != 1 {
-                *current_animation = 1;
-                transitions
-                .play(
-                    &mut anim_player,
-                    character_handle.animations[*current_animation],
-                    Duration::from_millis(10),
                 )
                 .repeat();
             }
@@ -207,6 +188,7 @@ fn apply_controls(
             // The height is the only mandatory field of the jump button.
             height: 15.0,
             // `TnuaBuiltinJump` also has customization fields with sensible defaults.
+            input_buffer_time: 500.75,
             ..Default::default()
         });
     }

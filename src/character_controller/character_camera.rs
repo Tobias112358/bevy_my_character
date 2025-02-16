@@ -50,7 +50,7 @@ fn camera_move_to_player(
 
     
     new_cam_pos = camera_state.rotation.mul_vec3(new_cam_pos);
-    println!("{:?}", camera_state.rotation);
+    //println!("{:?}", camera_state.rotation);
     new_cam_pos += player_transform.translation;
 
     let mut yaw = 0.0;
