@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use avian3d::prelude::{collider, Collider, Collisions, Sensor};
 use bevy::{input::mouse::MouseButtonInput, prelude::*, state::commands};
 
 use crate::{
@@ -12,22 +13,24 @@ pub fn plugin(app: &mut App) {
         .add_systems(Update, (
             setup,
             attack_trigger,
-            attack_update
+            attack_time_system,
+            setup_attack_colliders
         ).run_if(in_state(AssetLoadingState::Loaded)))
         .add_systems(PostUpdate, (
             update_combat_manager_after_attack
         ).run_if(in_state(AssetLoadingState::Loaded)))
-        .add_observer(
-            |trigger: Trigger<AttackEvent>,
-
-            | {
-                let event = trigger.event();
-                println!("Attack event triggered.");
-        });
+        .add_observer(in_attack);
 }
 
+
+
+#[derive(Component)]
+pub struct PlayerCharacterAttackCollider;
+
 #[derive(Event)]
-struct AttackEvent;
+struct AttackEvent {
+    damage: f32
+}
 
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub enum AttackType {
@@ -35,7 +38,7 @@ pub enum AttackType {
     Heavy
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub enum AttackState {
     Windup,
     Attack,
@@ -178,8 +181,9 @@ fn attack_trigger(
     }
 }
 
-fn attack_update(
+fn attack_time_system(
     mut combat_action_query: Query<(Entity, &mut CombatAction)>,
+
     time: Res<Time>,
     mut commands: Commands
 ) {
@@ -195,7 +199,9 @@ fn attack_update(
             }
             AttackState::Attack => {
                 //Emit attack event
-                commands.trigger(AttackEvent);
+                commands.trigger(AttackEvent {
+                    damage: combat_action.damage
+                });
                 combat_action.combat_timer.timer.tick(time.delta());
                 println!("Attack");
                 if combat_action.combat_timer.timer.finished() {
@@ -219,6 +225,23 @@ fn attack_update(
     }
 }
 
+fn in_attack(
+    trigger: Trigger<AttackEvent>,
+    collider_query: Query<(Entity, &Collider), With<PlayerCharacterAttackCollider>>,
+    collisions: Res<Collisions>
+) {
+    trigger.event().damage;
+    
+    let Ok((entity, collider)) = collider_query.get_single() else {
+        return;
+    };
+
+    for colliding_with_hand in collisions.collisions_with_entity(entity) {
+
+        println!("{:?}", colliding_with_hand);
+    }
+}
+
 
 fn update_combat_manager_after_attack(
     mut query: Query<&mut CombatManager, Without<CombatAction>>,
@@ -228,4 +251,40 @@ fn update_combat_manager_after_attack(
             combat_manager.in_attack = false;
         }
     }
+}
+
+fn setup_attack_colliders(
+    mut commands: Commands,
+    entity_query: Query<Entity, With<PlayerCharacter>>, 
+    children_query: Query<&Children>,
+    name_query: Query<&Name>,
+    player_attack_collider_query: Query<Entity, With<PlayerCharacterAttackCollider>>
+) {
+
+    if !player_attack_collider_query.is_empty() {
+        return;
+    }
+    
+    let Ok(entity) = entity_query.get_single() else {
+        println!("Failed to get entity");
+        return;
+    };
+    for descendant in children_query.iter_descendants(entity) {
+        // Do something!
+        let Ok(descendant_name) = name_query.get(descendant) else {
+            println!("Failed to get descendant name");
+            continue;
+        };
+
+        if descendant_name.to_string() == "Bone.023" {
+            commands.entity(descendant).insert((
+                PlayerCharacterAttackCollider,
+                Collider::sphere(0.5),
+                Sensor
+            ));
+
+            println!("makin bone collider");
+        }
+    }
+
 }

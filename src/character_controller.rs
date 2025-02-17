@@ -11,7 +11,7 @@ mod character_camera;
 use character_camera::CameraState;
 
 use crate::{
-    asset_loader::{AssetLoadingState, CharacterHandle}, combat_manager::{AttackType, CombatAction}
+    animation_handler::{AnimationHandler, ResourceHandle}, asset_loader::{AssetLoadingState, CharacterHandle}, combat_manager::{AttackType, CombatAction}
 };
 
 #[derive(Component)]
@@ -26,9 +26,7 @@ pub fn plugin(app: &mut App) {
         ))
         .add_systems(OnEnter(AssetLoadingState::Loaded), setup)
         .add_systems(Update, (
-            add_animation_transition_to_player,
-            apply_controls,
-            animation_handler
+            apply_controls
         ).run_if(in_state(AssetLoadingState::Loaded)));
 }
 
@@ -37,118 +35,23 @@ pub fn setup(
     dogman: Res<CharacterHandle>
 ) {
 
-    commands.spawn((
+    let id = commands.spawn((
         PlayerCharacter,
+        AnimationHandler {
+            current_animation: *dogman.animation_name_reference.get("Idle").unwrap(),
+            resource_type: ResourceHandle::Character
+        },
         SceneRoot(dogman.scene.clone()), 
         Transform::from_xyz(0.0, 4.0, 0.0),
         RigidBody::Dynamic,
         Collider::cylinder(1.5, 7.3),
         TnuaController::default(),
         TnuaAvian3dSensorShape(Collider::cylinder(1.4, 7.2))
-    ));
+    )).id();
+
 
     
-}
-
-fn add_animation_transition_to_player(
-    mut commands: Commands,
-    mut players: Query<(Entity, &mut AnimationPlayer), Added<AnimationPlayer>>,
-    character_handle: Res<CharacterHandle>,
-) {
-    for (entity, mut player) in &mut players {
-        let mut transitions = AnimationTransitions::new();
-
-        transitions
-            .play(&mut player, character_handle.animations[0], Duration::ZERO)
-            .repeat();
-
-        commands
-            .entity(entity)
-            .insert(AnimationGraphHandle(character_handle.animation_graph.clone()))
-            .insert(transitions);
-    }
-}
-
-fn animation_handler(
-    mut animation_players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
-    character_handle: Res<CharacterHandle>,
-    player_query: Query<(&LinearVelocity, &TnuaController, Option<&CombatAction>), With<PlayerCharacter>>,
-    mut current_animation: Local<usize>
-) {
-
-    for (mut anim_player, mut transitions) in &mut animation_players {
-        let Ok((velocity, tnua_context, combat_action_option)) = player_query.get_single() else {
-            continue;
-        };
-
-        let Ok(is_airborne) = tnua_context.is_airborne() else {
-            println!("Failed to check if tnua_context is airborne");
-            continue;
-        };
-
-        if combat_action_option.is_some() {
-            if combat_action_option.unwrap().attack_type == AttackType::Light {
-                if *current_animation != *character_handle.animation_name_reference.get("LightAttack").unwrap() {
-                    *current_animation = *character_handle.animation_name_reference.get("LightAttack").unwrap();
-                    transitions
-                    .play(
-                        &mut anim_player,
-                        character_handle.animations[*current_animation],
-                        Duration::from_millis(50),
-                    )
-                    .set_speed(2.);
-                } 
-            } else {
-                if *current_animation != *character_handle.animation_name_reference.get("HeavyAttack").unwrap() {
-                    *current_animation = *character_handle.animation_name_reference.get("HeavyAttack").unwrap();
-                    transitions
-                    .play(
-                        &mut anim_player,
-                        character_handle.animations[*current_animation],
-                        Duration::from_millis(50),
-                    )
-                    .set_speed(2.);
-                }
-            }
-        } else {
-            if is_airborne {
-                if *current_animation != *character_handle.animation_name_reference.get("Jumping").unwrap() {
-                    *current_animation = *character_handle.animation_name_reference.get("Jumping").unwrap();
-                    transitions
-                    .play(
-                        &mut anim_player,
-                        character_handle.animations[*current_animation],
-                        Duration::from_millis(50),
-                    )
-                    .set_speed(0.8);
-                }
-            } else if velocity.length() > 0.25 && !is_airborne {
-                if *current_animation != *character_handle.animation_name_reference.get("Running").unwrap() {
-                    *current_animation = *character_handle.animation_name_reference.get("Running").unwrap();
-                    transitions
-                    .play(
-                        &mut anim_player,
-                        character_handle.animations[*current_animation],
-                        Duration::from_millis(250),
-                    )
-                    .repeat();
-                }
-            } else {
-                if *current_animation != *character_handle.animation_name_reference.get("Idle").unwrap() {
-                    *current_animation = *character_handle.animation_name_reference.get("Idle").unwrap();
-                    println!("{}", *current_animation);
-                transitions
-                    .play(
-                        &mut anim_player,
-                        character_handle.animations[*current_animation],
-                        Duration::from_millis(250),
-                    )
-                    .repeat();
-                }
-            }
-        }
-        
-    }
+    println!("player id: {:?}", id);
 }
 
 
