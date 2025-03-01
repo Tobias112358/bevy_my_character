@@ -2,6 +2,7 @@ use std::process::Command;
 
 use avian3d::prelude::{collider, Collider, Collisions, Sensor};
 use bevy::{input::mouse::MouseButtonInput, prelude::*, state::commands};
+use rand::Rng;
 
 use crate::{
     asset_loader::AssetLoadingState,
@@ -12,9 +13,10 @@ pub fn plugin(app: &mut App) {
     app
         .add_systems(Update, (
             setup,
-            attack_trigger,
+            player_attack_trigger,
             attack_time_system,
-            setup_attack_colliders
+            setup_attack_colliders,
+            npc_attack
         ).run_if(in_state(AssetLoadingState::Loaded)))
         .add_systems(PostUpdate, (
             update_combat_manager_after_attack
@@ -22,6 +24,8 @@ pub fn plugin(app: &mut App) {
         .add_observer(in_attack);
 }
 
+#[derive(Component)]
+pub struct AttackMode;
 
 
 #[derive(Component)]
@@ -55,18 +59,32 @@ pub struct CombatTimer {
 #[derive(Component, Debug, Clone)]
 pub struct CombatAction {
     pub attack_type: AttackType,
-    attack_state: AttackState,
-    combat_timer: CombatTimer,
-    windup: f32,
-    attack_time: f32,
-    cooldown: f32,
-    damage: f32
+    pub attack_state: AttackState,
+    pub combat_timer: CombatTimer,
+    pub windup: f32,
+    pub attack_time: f32,
+    pub cooldown: f32,
+    pub damage: f32
+}
+
+impl CombatAction {
+    pub fn new(attack_type: AttackType, windup: f32, attack_time: f32, cooldown: f32, damage: f32) -> Self {
+        Self {
+            attack_type,
+            attack_state: AttackState::Idle,
+            combat_timer: CombatTimer::default(),
+            windup,
+            attack_time,
+            cooldown,
+            damage
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct WeaponStats {
-    light_attack: CombatAction,
-    heavy_attack: CombatAction
+    pub light_attack: CombatAction,
+    pub heavy_attack: CombatAction
 }
 
 impl Default for WeaponStats {
@@ -97,8 +115,8 @@ impl Default for WeaponStats {
 #[derive(Component, Debug)]
 #[require(Transform)]
 pub struct Weapon {
-    weapon_entity: Option<Entity>,
-    weapon_stats: WeaponStats
+    pub weapon_entity: Option<Entity>,
+    pub weapon_stats: WeaponStats
 }
 
 impl Default for Weapon {
@@ -113,9 +131,9 @@ impl Default for Weapon {
 #[derive(Component, Debug)]
 #[require(Weapon)]
 pub struct CombatManager {
-    weapon: Weapon,
-    last_attack_cooldown: f32,
-    in_attack: bool
+    pub weapon: Weapon,
+    pub last_attack_cooldown: f32,
+    pub in_attack: bool
 }
 
 fn setup(
@@ -136,7 +154,7 @@ fn setup(
     });
 }
 
-fn attack_trigger(
+fn player_attack_trigger(
     mut commands: Commands,
     mut player_query: Query<(Entity, &mut CombatManager, &mut Weapon), With<PlayerCharacter>>,
     mut mouse_click: EventReader<MouseButtonInput>
@@ -182,12 +200,12 @@ fn attack_trigger(
 }
 
 fn attack_time_system(
-    mut combat_action_query: Query<(Entity, &mut CombatAction)>,
+    mut combat_action_query: Query<(Entity, &mut CombatAction, Option<&AttackMode>)>,
 
     time: Res<Time>,
     mut commands: Commands
 ) {
-    for (entity,  mut combat_action) in combat_action_query.iter_mut() {
+    for (entity,  mut combat_action, attack_mode_option) in combat_action_query.iter_mut() {
         match combat_action.attack_state {
             AttackState::Windup => {
                 combat_action.combat_timer.timer.tick(time.delta());
@@ -220,6 +238,9 @@ fn attack_time_system(
             _ => {
                 println!("idle");
                 commands.entity(entity).remove::<CombatAction>();
+                if attack_mode_option.is_some() {
+                    commands.entity(entity).remove::<AttackMode>();
+                }
             }
         }
     }
@@ -287,4 +308,37 @@ fn setup_attack_colliders(
         }
     }
 
+}
+
+fn npc_attack(
+    mut commands: Commands,
+    mut attack_mode_query: Query<(Entity, &mut CombatManager), (With<AttackMode>, Without<PlayerCharacter>)>,
+) {
+    for (entity, mut combat_manager) in attack_mode_query.iter_mut() {
+        if !combat_manager.in_attack {
+            let mut combat_action: CombatAction;
+
+            let mut rng = rand::rng();
+
+            let random_number: f32 = rng.random_range(0.0..1.0);
+
+
+            if random_number < 1. {
+                println!("In left branch.");
+                combat_action = combat_manager.weapon.weapon_stats.light_attack.clone();
+
+            } else {
+                println!("In right branch.");
+                combat_action = combat_manager.weapon.weapon_stats.heavy_attack.clone();
+            }
+            combat_action.attack_state = AttackState::Windup;
+            combat_action.combat_timer.timer = Timer::from_seconds(combat_action.windup, TimerMode::Once);
+
+            commands.entity(entity).insert(combat_action);
+
+            combat_manager.in_attack = true;
+
+            println!("{:?}",combat_manager);
+        }
+    }
 }

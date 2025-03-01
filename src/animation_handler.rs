@@ -159,17 +159,45 @@ fn animation_handler(
                 }
             }
         } else {
-            if animation_handler.current_animation != *enemy_handle.animation_name_reference.get("Idle").unwrap() {
-                animation_handler.current_animation = *enemy_handle.animation_name_reference.get("Idle").unwrap();
-                println!("{}", animation_handler.current_animation);
-            transitions
-                .play(
-                    &mut anim_player,
-                    enemy_handle.animations[animation_handler.current_animation],
-                    Duration::from_millis(250),
-                )
-                .repeat();
+
+            if combat_action_option.is_some() {
+                if combat_action_option.unwrap().attack_type == AttackType::Light {
+                    if animation_handler.current_animation != *enemy_handle.animation_name_reference.get("LightAttack").unwrap() {
+                        animation_handler.current_animation = *enemy_handle.animation_name_reference.get("LightAttack").unwrap();
+                        transitions
+                        .play(
+                            &mut anim_player,
+                            enemy_handle.animations[animation_handler.current_animation],
+                            Duration::from_millis(50),
+                        ).set_speed(2.);
+                    } 
+                } else {
+                    if animation_handler.current_animation != *enemy_handle.animation_name_reference.get("HeavyAttack").unwrap() {
+                        animation_handler.current_animation = *enemy_handle.animation_name_reference.get("HeavyAttack").unwrap();
+                        transitions
+                        .play(
+                            &mut anim_player,
+                            enemy_handle.animations[animation_handler.current_animation],
+                            Duration::from_millis(50),
+                        )
+                        .set_speed(2.);
+                    }
+                }
+            } else {
+                if animation_handler.current_animation != *enemy_handle.animation_name_reference.get("Idle").unwrap() {
+                    animation_handler.current_animation = *enemy_handle.animation_name_reference.get("Idle").unwrap();
+                    println!("{}", animation_handler.current_animation);
+                transitions
+                    .play(
+                        &mut anim_player,
+                        enemy_handle.animations[animation_handler.current_animation],
+                        Duration::from_millis(250),
+                    )
+                    .repeat();
+                }
             }
+
+            
         }
     }
 
