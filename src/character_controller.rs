@@ -58,7 +58,7 @@ pub fn setup(
 fn apply_controls(
     keyboard: Res<ButtonInput<KeyCode>>, 
     mut query: Query<(&mut Transform, &mut TnuaController), With<PlayerCharacter>>,
-    camera_query: Query<&CameraState, (With<Camera3d>, Without<PlayerCharacter>)>
+    camera_query: Query<&Transform, (With<Camera3d>, Without<PlayerCharacter>)>
 ) {
     let Ok((mut transform, mut controller)) = query.get_single_mut() else {
         return;
@@ -79,16 +79,23 @@ fn apply_controls(
         direction -= Vec3::X;
     }
 
-    let Ok(camera_state) = camera_query.get_single() else {
+    let Ok(camera_transform) = camera_query.get_single() else {
         return;
     };
 
-    direction = camera_state.rotation.mul_vec3(direction);
-
     if direction != Vec3::ZERO {
+        
+        direction = -camera_transform.rotation.mul_vec3(direction);
+        direction.y = 0.0;
+        direction = direction.normalize();
+
+        println!("{:?}", direction);
+        
+
         let face_direction = transform.looking_to(-direction, Dir3::Y);
 
-        transform.rotation = transform.rotation.slerp(face_direction.rotation, 0.05);
+        transform.rotation = transform.rotation.slerp(face_direction.rotation, 0.9);
+
     }
     
 

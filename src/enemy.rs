@@ -25,7 +25,7 @@ pub fn setup(
             resource_type: ResourceHandle::Enemy
         },
         SceneRoot(alien_assets.scene.clone()),
-        Transform::from_xyz(0.0, 8.0, 4.0),
+        Transform::from_xyz(0.0, 8.0, 8.0),
         RigidBody::Dynamic,
         Collider::cuboid(1.5, 7.3, 1.5),
         LockedAxes::ROTATION_LOCKED
