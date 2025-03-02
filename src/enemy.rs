@@ -3,7 +3,7 @@ use avian3d::prelude::*;
 
 use crate::{animation_handler::{AnimationHandler, ResourceHandle}, asset_loader::{AssetLoadingState, EnemyHandle}, character_controller::PlayerCharacter, combat_manager::{
     AttackMode, AttackType, CombatAction, CombatManager, Weapon, WeaponStats
-}};
+}, health_manager::Health};
 
 pub fn plugin(app: &mut App) {
     app
@@ -16,9 +16,9 @@ pub struct Enemy;
 
 pub fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut alien_assets: ResMut<EnemyHandle>
+    //mut meshes: ResMut<Assets<Mesh>>,
+    //mut materials: ResMut<Assets<StandardMaterial>>,
+    alien_assets: Res<EnemyHandle>
 ) {
     let id = commands.spawn((
         Enemy,
@@ -29,7 +29,7 @@ pub fn setup(
         SceneRoot(alien_assets.scene.clone()),
         Transform::from_xyz(0.0, 8.0, 8.0),
         RigidBody::Dynamic,
-        Collider::cuboid(1.5, 7.3, 1.5),
+        Collider::cylinder(1.5, 7.3),
         LockedAxes::ROTATION_LOCKED,
         CombatManager {
             in_attack: false,
@@ -37,11 +37,12 @@ pub fn setup(
             weapon: Weapon {
                 weapon_entity: None,
                 weapon_stats: WeaponStats {
-                    light_attack : CombatAction::new(AttackType::Light, 0.5, 0.25, 0.55, 10.),
+                    light_attack : CombatAction::new(AttackType::Light, 0.5, 0.25, 0.55, 1.),
                     ..default()
                 }
             }
-        }
+        },
+        Health::new(100),
     )).id();
 
     println!("enemy id: {:?}", id);
@@ -61,7 +62,7 @@ pub fn move_alien(
 
     for (entity, mut transform) in query.iter_mut() {
 
-        if transform.translation.distance(target.translation) < 6.0 {
+        if transform.translation.distance(target.translation) < 4.0 {
             commands.entity(entity).insert(AttackMode);
             continue;
         }
@@ -70,9 +71,11 @@ pub fn move_alien(
 
         direction_translation.y = 0.0;
 
-        let looking_at = transform.looking_at(direction_translation, Vec3::Y);
+        let (yaw, _pitch, _roll) = transform
+            .looking_at(direction_translation, Vec3::Y)
+            .rotation.to_euler(EulerRot::YXZ);
 
-        transform.rotation = looking_at.rotation;
+        transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, 0., 0.);
         let forward = transform.forward();
         transform.translation += forward * 5.0 * time.delta_secs();
     }

@@ -6,7 +6,7 @@ use rand::Rng;
 
 use crate::{
     asset_loader::AssetLoadingState,
-    character_controller::PlayerCharacter
+    character_controller::PlayerCharacter, health_manager::HealthModifyEvent
 };
 
 pub fn plugin(app: &mut App) {
@@ -15,11 +15,11 @@ pub fn plugin(app: &mut App) {
             setup,
             player_attack_trigger,
             attack_time_system,
-            setup_attack_colliders,
             npc_attack
         ).run_if(in_state(AssetLoadingState::Loaded)))
         .add_systems(PostUpdate, (
-            update_combat_manager_after_attack
+            update_combat_manager_after_attack,
+            setup_attack_colliders,
         ).run_if(in_state(AssetLoadingState::Loaded)))
         .add_observer(in_attack);
 }
@@ -29,11 +29,14 @@ pub struct AttackMode;
 
 
 #[derive(Component)]
-pub struct PlayerCharacterAttackCollider;
+pub struct AttackCollider {
+    pub parent: Entity
+}
 
 #[derive(Event)]
 struct AttackEvent {
-    damage: f32
+    damage: f32,
+    attacker: Entity
 }
 
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -97,7 +100,7 @@ impl Default for WeaponStats {
                 windup: 0.2,
                 attack_time: 0.1,
                 cooldown: 0.45,
-                damage: 10.0
+                damage: 2.0
             },
             heavy_attack: CombatAction {
                 attack_type: AttackType::Heavy,
@@ -106,7 +109,7 @@ impl Default for WeaponStats {
                 windup: 0.4,
                 attack_time: 0.2,
                 cooldown: 1.0,
-                damage: 20.0
+                damage: 4.0
             }
         }
     }
@@ -218,10 +221,12 @@ fn attack_time_system(
             AttackState::Attack => {
                 //Emit attack event
                 commands.trigger(AttackEvent {
-                    damage: combat_action.damage
+                    damage: combat_action.damage,
+                    attacker: entity,
+                    
                 });
                 combat_action.combat_timer.timer.tick(time.delta());
-                println!("Attack");
+                //println!("Attack");
                 if combat_action.combat_timer.timer.finished() {
                     combat_action.attack_state = AttackState::Cooldown;
                     combat_action.combat_timer.timer = Timer::from_seconds(combat_action.cooldown, TimerMode::Once);
@@ -248,19 +253,30 @@ fn attack_time_system(
 
 fn in_attack(
     trigger: Trigger<AttackEvent>,
-    collider_query: Query<(Entity, &Collider), With<PlayerCharacterAttackCollider>>,
-    collisions: Res<Collisions>
+    collider_query: Query<(Entity, &Collider, &AttackCollider), With<AttackCollider>>,
+    collisions: Res<Collisions>,
+    mut health_modify_event_writer: EventWriter<HealthModifyEvent>
 ) {
     trigger.event().damage;
     
-    let Ok((entity, collider)) = collider_query.get_single() else {
-        return;
-    };
+    for (entity, collider, attack_collider) in collider_query.iter() {
 
-    for colliding_with_hand in collisions.collisions_with_entity(entity) {
+        if attack_collider.parent != trigger.event().attacker {
+            continue;
+        }
+        
+        println!("Attacker: Attack collider - {:?}, Parent: {:?}", entity, attack_collider.parent);
+        for colliding_with_hand in collisions.collisions_with_entity(entity) {
 
-        println!("{:?}", colliding_with_hand);
+            health_modify_event_writer.send(HealthModifyEvent {
+                amount: -trigger.event().damage as i32,
+                damaged_entity: colliding_with_hand.entity1
+            });
+            println!("COLLIDING WITH HAND: {:?}", colliding_with_hand);
+        }
     }
+
+    
 }
 
 
@@ -276,35 +292,30 @@ fn update_combat_manager_after_attack(
 
 fn setup_attack_colliders(
     mut commands: Commands,
-    entity_query: Query<Entity, With<PlayerCharacter>>, 
+    entity_query: Query<Entity, Added<CombatManager>>, 
     children_query: Query<&Children>,
     name_query: Query<&Name>,
-    player_attack_collider_query: Query<Entity, With<PlayerCharacterAttackCollider>>
 ) {
 
-    if !player_attack_collider_query.is_empty() {
-        return;
-    }
-    
-    let Ok(entity) = entity_query.get_single() else {
-        println!("Failed to get entity");
-        return;
-    };
-    for descendant in children_query.iter_descendants(entity) {
-        // Do something!
-        let Ok(descendant_name) = name_query.get(descendant) else {
-            println!("Failed to get descendant name");
-            continue;
-        };
+    for entity in entity_query.iter() {
+        for descendant in children_query.iter_descendants(entity) {
+            // Do something!
+            let Ok(descendant_name) = name_query.get(descendant) else {
+                println!("Failed to get descendant name");
+                continue;
+            };
 
-        if descendant_name.to_string() == "Bone.023" {
-            commands.entity(descendant).insert((
-                PlayerCharacterAttackCollider,
-                Collider::sphere(0.5),
-                Sensor
-            ));
+            if descendant_name.to_string() == "Bone.023" || descendant_name.to_string().contains("Finger") {
+                commands.entity(descendant).insert((
+                    AttackCollider {
+                        parent: entity
+                    },
+                    Collider::sphere(0.5),
+                    Sensor
+                ));
 
-            println!("makin bone collider");
+                println!("makin bone collider");
+            }
         }
     }
 

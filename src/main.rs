@@ -4,6 +4,7 @@ use avian3d::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use character_controller::PlayerCharacter;
 use combat_manager::CombatAction;
+use health_manager::Health;
 
 mod asset_loader;
 mod scene;
@@ -11,6 +12,7 @@ mod character_controller;
 mod combat_manager;
 mod enemy;
 mod animation_handler;
+mod health_manager;
 
 #[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
 enum DescribedDogman {
@@ -26,7 +28,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin)
         .add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()))
-        .add_plugins((asset_loader::plugin, scene::plugin, character_controller::plugin, combat_manager::plugin, enemy::plugin, animation_handler::plugin))
+        .add_plugins((asset_loader::plugin, scene::plugin, character_controller::plugin, combat_manager::plugin, enemy::plugin, animation_handler::plugin, health_manager::plugin))
         .add_systems(Update, (egui_setup, get_nodes_in_scene, link_animations))
         .init_state::<DescribedDogman>()
         .add_systems(Update, (describe_dogman).run_if(in_state(DescribedDogman::False)))
@@ -36,7 +38,8 @@ fn main() {
 
 fn egui_setup(
     mut contexts: EguiContexts,
-    combat_manager_query: Query<&CombatAction>
+    combat_manager_query: Query<&CombatAction>,
+    health_query: Query<&Health>,
 ) {
 
 
@@ -45,6 +48,7 @@ fn egui_setup(
             ui.label(format!("{:?}", combat_action));
             
         });
+
     });
 
 }

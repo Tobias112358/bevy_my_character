@@ -3,6 +3,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 use avian3d::prelude::*;
 
+use bevy_health_bar3d::prelude::{BarHeight, BarSettings};
 use bevy_tnua::prelude::*;
 use bevy_tnua_avian3d::*; 
 
@@ -11,7 +12,7 @@ mod character_camera;
 use character_camera::CameraState;
 
 use crate::{
-    animation_handler::{AnimationHandler, ResourceHandle}, asset_loader::{AssetLoadingState, CharacterHandle}, combat_manager::{AttackType, CombatAction}
+    animation_handler::{AnimationHandler, ResourceHandle}, asset_loader::{AssetLoadingState, CharacterHandle}, combat_manager::{AttackType, CombatAction}, health_manager::Health
 };
 
 #[derive(Component)]
@@ -46,7 +47,8 @@ pub fn setup(
         RigidBody::Dynamic,
         Collider::cylinder(1.5, 7.3),
         TnuaController::default(),
-        TnuaAvian3dSensorShape(Collider::cylinder(1.4, 7.2))
+        TnuaAvian3dSensorShape(Collider::cylinder(1.4, 7.2)),
+        Health::new(100),
     )).id();
 
 
