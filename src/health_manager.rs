@@ -85,10 +85,15 @@ pub fn health_modify(
 
 pub fn die(
     mut death_event: EventReader<DeathEvent>,
-    mut commands: Commands
+    mut commands: Commands,
 ) {
     for event in death_event.read() {
-        commands.entity(event.0).despawn();
+
+        let Some(entity) = commands.get_entity(event.0) else {
+            continue;
+        };
+        
+        entity.despawn_recursive();
     }
 }
 

@@ -36,7 +36,7 @@ pub fn setup(
         MeshMaterial3d(cube_mat),
         Transform::from_translation(Vec3::new(0., -1., 0.)),
         RigidBody::Static,
-        Collider::cuboid(200.0, 0.1, 200.0),
+        Collider::cuboid(200.0, -10.1, 200.0),
     ));
 
     commands.spawn((
@@ -49,7 +49,16 @@ pub fn setup(
         Transform::from_xyz(0.0, 12.0, 0.0),
     ));
 
-    commands.spawn(
-        DirectionalLight::default()
-    );
+    commands.spawn((
+        DirectionalLight {
+            color: Color::srgb(0.7, 0.7, 0.7),
+            ..default()
+        },
+        Transform::from_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            80.0,
+            0.0,
+            0.0,
+        )),
+    ));
 }

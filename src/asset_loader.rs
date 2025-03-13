@@ -12,7 +12,8 @@ pub fn plugin(app: &mut App) {
 
     let asset_paths: Vec<String> = vec![
         "dogman.glb".to_string(), 
-        "AlienEnemy.glb".to_string()
+        "AlienEnemy.glb".to_string(),
+        "TestMap.glb".to_string(),
         ];
 
     app
@@ -53,7 +54,20 @@ pub struct EnemyGltf {
 }
 
 #[derive(Resource)]
+pub struct MapGltf {
+    pub gltf: Handle<Gltf>,
+}
+
+#[derive(Resource)]
 pub struct EnemyHandle {
+    pub scene: Handle<Scene>,
+    pub animations: Vec<AnimationNodeIndex>,
+    pub animation_graph: Handle<AnimationGraph>,
+    pub animation_name_reference: HashMap<String, usize>,
+}
+
+#[derive(Resource)]
+pub struct MapHandle {
     pub scene: Handle<Scene>,
     pub animations: Vec<AnimationNodeIndex>,
     pub animation_graph: Handle<AnimationGraph>,
@@ -125,12 +139,18 @@ fn setup(
 
     let alien_gltf: Handle<Gltf> = asset_server.load("AlienEnemy.glb");
 
+    let test_map_gltf: Handle<Gltf> = asset_server.load("TestMap.glb");
+
     commands.insert_resource(DogmanGltf {
         gltf: domgan_gltf,
     });
 
     commands.insert_resource(EnemyGltf {
         gltf: alien_gltf,
+    });
+
+    commands.insert_resource(MapGltf {
+        gltf: test_map_gltf,
     });
 
     next_asset_loading_state.set(AssetLoadingState::Init2);
@@ -140,6 +160,7 @@ fn wait_for_gltf_to_load(
     gltf_assets: Res<Assets<Gltf>>,
     dogman_gltf: Res<DogmanGltf>,
     alien_gltf: Res<EnemyGltf>,
+    test_map_gltf: Res<MapGltf>,
     mut next_asset_loading_state: ResMut<NextState<AssetLoadingState>>,
 ) {
     let Some(_dogman_gltf) = gltf_assets.get(&dogman_gltf.gltf) else {
@@ -147,6 +168,10 @@ fn wait_for_gltf_to_load(
     };
 
     let Some(_alien_gltf) = gltf_assets.get(&alien_gltf.gltf) else {
+        return;
+    };
+
+    let Some(_test_map_gltf) = gltf_assets.get(&test_map_gltf.gltf) else {
         return;
     };
 
@@ -158,6 +183,7 @@ fn parse_gltf(
     gltf_node_assets: Res<Assets<GltfNode>>,
     dogman_gltf: Res<DogmanGltf>,
     alien_gltf: Res<EnemyGltf>,
+    map_gltf: Res<MapGltf>,
     mut commands: Commands,
     //character_handle: Res<CharacterHandle>,
     asset_server: Res<AssetServer>,
@@ -234,6 +260,40 @@ fn parse_gltf(
         animations: alien_node_indices,
         animation_graph: alien_graph_handle,
         animation_name_reference: alien_name_mapping,
+    });
+
+
+    let map_scene: Handle<Scene> = asset_server.load("TestMap.glb#Scene0");
+
+    let Some(map_gltf) = gltf_assets.get(&map_gltf.gltf) else {
+        return;
+    };
+
+    let mut map_clips = Vec::new();
+    let mut map_name_mapping = HashMap::new();
+
+    map_gltf.named_animations.iter().enumerate().for_each(|(index, animation)| {
+
+        let anim_path = animation.1.path().unwrap();
+        map_clips.push(asset_server.load(anim_path));
+
+        map_name_mapping.insert(animation.0.to_string(), index);
+        
+    });
+    
+    let (map_graph, map_node_indices) = AnimationGraph::from_clips(map_clips);
+
+    map_node_indices.iter().for_each(|node| {
+        println!("{}", node.index());
+    });
+
+    let map_graph_handle = graphs.add(map_graph);
+
+    commands.insert_resource(MapHandle {
+        scene: map_scene,
+        animations: map_node_indices,
+        animation_graph: map_graph_handle,
+        animation_name_reference: map_name_mapping,
     });
 
     

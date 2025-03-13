@@ -13,6 +13,7 @@ mod combat_manager;
 mod enemy;
 mod animation_handler;
 mod health_manager;
+mod map;
 
 #[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
 enum DescribedDogman {
@@ -28,7 +29,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin)
         .add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()))
-        .add_plugins((asset_loader::plugin, scene::plugin, character_controller::plugin, combat_manager::plugin, enemy::plugin, animation_handler::plugin, health_manager::plugin))
+        .add_plugins((asset_loader::plugin, scene::plugin, character_controller::plugin, combat_manager::plugin, enemy::plugin, animation_handler::plugin, health_manager::plugin, map::plugin))
         .add_systems(Update, (egui_setup, get_nodes_in_scene, link_animations))
         .init_state::<DescribedDogman>()
         .add_systems(Update, (describe_dogman).run_if(in_state(DescribedDogman::False)))

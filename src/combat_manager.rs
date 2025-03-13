@@ -267,7 +267,6 @@ fn in_attack(
         
         println!("Attacker: Attack collider - {:?}, Parent: {:?}", entity, attack_collider.parent);
         for colliding_with_hand in collisions.collisions_with_entity(entity) {
-
             health_modify_event_writer.send(HealthModifyEvent {
                 amount: -trigger.event().damage as i32,
                 damaged_entity: colliding_with_hand.entity1
